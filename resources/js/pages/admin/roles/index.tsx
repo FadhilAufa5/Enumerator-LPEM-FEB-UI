@@ -1,72 +1,22 @@
 import { useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import {
-    ShieldCheck,
-    Plus,
-    Pencil,
-    Trash2,
-    Users,
-    Lock,
-    Unlock,
-    ChevronDown,
-    ChevronUp,
-    Check,
-    X,
-    Crown,
-    Shield,
-    Eye,
-    Settings,
+    ShieldCheck, Plus, Pencil, Trash2, Users, Lock,
+    ChevronDown, ChevronUp, Check, X, Crown, Shield, Eye, Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
 import type { Role, Permission } from '@/types';
 import RoleFormModal from './form-modal';
 import DeleteConfirmDialog from '@/components/admin/delete-confirm-dialog';
 
-// ── All permissions grouped ────────────────────────────────
-const allPermissions: Permission[] = [
-    // Enumerator
-    { id: 1,  name: 'enumerator.view',   label: 'Lihat Enumerator',   group: 'Enumerator' },
-    { id: 2,  name: 'enumerator.create', label: 'Tambah Enumerator',  group: 'Enumerator' },
-    { id: 3,  name: 'enumerator.edit',   label: 'Edit Enumerator',    group: 'Enumerator' },
-    { id: 4,  name: 'enumerator.delete', label: 'Hapus Enumerator',   group: 'Enumerator' },
-    // Wilayah
-    { id: 5,  name: 'wilayah.view',      label: 'Lihat Wilayah',      group: 'Wilayah' },
-    { id: 6,  name: 'wilayah.create',    label: 'Tambah Wilayah',     group: 'Wilayah' },
-    { id: 7,  name: 'wilayah.edit',      label: 'Edit Wilayah',       group: 'Wilayah' },
-    { id: 8,  name: 'wilayah.delete',    label: 'Hapus Wilayah',      group: 'Wilayah' },
-    // Survey
-    { id: 9,  name: 'survey.view',       label: 'Lihat Survey',       group: 'Survey' },
-    { id: 10, name: 'survey.create',     label: 'Buat Survey',        group: 'Survey' },
-    { id: 11, name: 'survey.edit',       label: 'Edit Survey',        group: 'Survey' },
-    { id: 12, name: 'survey.delete',     label: 'Hapus Survey',       group: 'Survey' },
-    // Penugasan
-    { id: 13, name: 'assignment.view',   label: 'Lihat Penugasan',    group: 'Penugasan' },
-    { id: 14, name: 'assignment.create', label: 'Buat Penugasan',     group: 'Penugasan' },
-    { id: 15, name: 'assignment.edit',   label: 'Edit Penugasan',     group: 'Penugasan' },
-    { id: 16, name: 'assignment.delete', label: 'Hapus Penugasan',    group: 'Penugasan' },
-    // Laporan
-    { id: 17, name: 'laporan.view',      label: 'Lihat Laporan',      group: 'Laporan' },
-    { id: 18, name: 'laporan.export',    label: 'Export Laporan',     group: 'Laporan' },
-    // User Management
-    { id: 19, name: 'users.view',        label: 'Lihat User',         group: 'User Management' },
-    { id: 20, name: 'users.create',      label: 'Tambah User',        group: 'User Management' },
-    { id: 21, name: 'users.edit',        label: 'Edit User',          group: 'User Management' },
-    { id: 22, name: 'users.delete',      label: 'Hapus User',         group: 'User Management' },
-    // Role
-    { id: 23, name: 'roles.manage',      label: 'Kelola Role',        group: 'User Management' },
-];
-
-const permGroups = [...new Set(allPermissions.map((p) => p.group))];
-
-// ── Mock roles ─────────────────────────────────────────────
-const mockRoles: Role[] = [
-    { id: 1, name: 'admin',      label: 'Administrator', description: 'Akses penuh ke seluruh fitur sistem',              color: 'violet',  permissions: allPermissions,                                  users_count: 2,  is_system: true,  created_at: '2025-01-01', updated_at: '2025-01-01' },
-    { id: 2, name: 'supervisor', label: 'Supervisor',    description: 'Mengelola data dan memantau progres lapangan',      color: 'blue',    permissions: allPermissions.filter((p) => !p.name.startsWith('roles') && !p.name.startsWith('users.delete')), users_count: 5, is_system: false, created_at: '2025-01-01', updated_at: '2025-01-01' },
-    { id: 3, name: 'operator',   label: 'Operator',      description: 'Input dan kelola data operasional survei',          color: 'emerald', permissions: allPermissions.filter((p) => ['view','create','edit'].some((a) => p.name.endsWith(a)) && !p.group.includes('User')), users_count: 12, is_system: false, created_at: '2025-01-01', updated_at: '2025-01-01' },
-    { id: 4, name: 'viewer',     label: 'Viewer',        description: 'Hanya bisa melihat data tanpa perubahan apapun',   color: 'slate',   permissions: allPermissions.filter((p) => p.name.endsWith('.view')),   users_count: 8,  is_system: false, created_at: '2025-01-01', updated_at: '2025-01-01' },
-];
+// ── Props from Inertia ─────────────────────────────────────
+interface Props {
+    roles: Role[];
+    allPermissions: Permission[];
+}
 
 // ── Role color map ─────────────────────────────────────────
 const roleColors: Record<string, { bg: string; text: string; ring: string; icon: React.ElementType }> = {
@@ -77,19 +27,13 @@ const roleColors: Record<string, { bg: string; text: string; ring: string; icon:
 };
 
 // ── Permission Matrix Row ──────────────────────────────────
-function PermissionMatrixRow({
-    group, permissions, roles,
-}: { group: string; permissions: Permission[]; roles: Role[] }) {
+function PermissionMatrixRow({ group, permissions, roles }: { group: string; permissions: Permission[]; roles: Role[] }) {
     const [expanded, setExpanded] = useState(false);
-
-    const hasAll = (role: Role, perms: Permission[]) =>
-        perms.every((p) => role.permissions.some((rp) => rp.id === p.id));
-
     const groupPerms = permissions.filter((p) => p.group === group);
+    const hasAll = (role: Role, perms: Permission[]) => perms.every((p) => role.permissions.some((rp) => rp.id === p.id));
 
     return (
         <div className="border rounded-xl overflow-hidden transition-all duration-200">
-            {/* Group header */}
             <button
                 onClick={() => setExpanded((v) => !v)}
                 className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/70 transition-colors text-left"
@@ -99,7 +43,6 @@ function PermissionMatrixRow({
                     <span className="font-medium text-sm">{group}</span>
                     <Badge variant="secondary" className="text-xs">{groupPerms.length} permission</Badge>
                 </div>
-                {/* summary dots */}
                 <div className="flex items-center gap-4">
                     <div className="hidden sm:flex gap-2">
                         {roles.map((role) => {
@@ -119,7 +62,6 @@ function PermissionMatrixRow({
                 </div>
             </button>
 
-            {/* Permission rows */}
             {expanded && (
                 <div className="divide-y">
                     {groupPerms.map((perm) => (
@@ -136,9 +78,7 @@ function PermissionMatrixRow({
                                     <div key={role.id} className="flex justify-center">
                                         <span className={`flex h-6 w-6 items-center justify-center rounded-full transition-all
                                             ${has ? `${cfg.bg} ${cfg.text}` : 'text-muted-foreground/30'}`}>
-                                            {has
-                                                ? <Check className="h-3.5 w-3.5" />
-                                                : <X className="h-3 w-3" />}
+                                            {has ? <Check className="h-3.5 w-3.5" /> : <X className="h-3 w-3" />}
                                         </span>
                                     </div>
                                 );
@@ -152,10 +92,11 @@ function PermissionMatrixRow({
 }
 
 // ── Role Card ──────────────────────────────────────────────
-function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: () => void; onDelete: () => void }) {
+function RoleCard({ role, allPermissions, onEdit, onDelete }: { role: Role; allPermissions: Permission[]; onEdit: () => void; onDelete: () => void }) {
     const cfg = roleColors[role.color] ?? roleColors.slate;
     const RoleIcon = cfg.icon;
-    const pct = Math.round((role.permissions.length / allPermissions.length) * 100);
+    const pct = allPermissions.length > 0 ? Math.round((role.permissions.length / allPermissions.length) * 100) : 0;
+    const permGroups = [...new Set(allPermissions.map((p) => p.group))];
 
     return (
         <Card className={`group relative overflow-hidden border-2 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${cfg.ring} ring-1`}>
@@ -176,7 +117,6 @@ function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: () => void; 
                 </div>
             </CardHeader>
             <CardContent className="space-y-3">
-                {/* Permission coverage */}
                 <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{role.permissions.length} permission aktif</span>
@@ -187,14 +127,12 @@ function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: () => void; 
                     </div>
                 </div>
 
-                {/* Stats row */}
                 <div className={`flex items-center gap-1.5 rounded-lg px-3 py-2 ${cfg.bg}`}>
                     <Users className={`h-4 w-4 ${cfg.text}`} />
                     <span className={`text-sm font-semibold ${cfg.text}`}>{role.users_count}</span>
                     <span className="text-xs text-muted-foreground">pengguna</span>
                 </div>
 
-                {/* Permission group pills */}
                 <div className="flex flex-wrap gap-1">
                     {permGroups.slice(0, 3).map((g) => {
                         const has = role.permissions.some((p) => p.group === g);
@@ -212,7 +150,6 @@ function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: () => void; 
                     )}
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-2 pt-1">
                     <Button size="sm" variant="outline" className="flex-1 gap-1.5 text-xs h-8" onClick={onEdit}>
                         <Pencil className="h-3 w-3" /> Edit
@@ -229,20 +166,49 @@ function RoleCard({ role, onEdit, onDelete }: { role: Role; onEdit: () => void; 
 }
 
 // ── Main Page ──────────────────────────────────────────────
-export default function RolesIndex() {
-    const [roles, setRoles]               = useState<Role[]>(mockRoles);
+export default function RolesIndex({ roles, allPermissions }: Props) {
+    const { props: pageProps } = usePage<{ flash?: { success?: string; error?: string } }>();
+
     const [isFormOpen, setIsFormOpen]     = useState(false);
     const [editingItem, setEditingItem]   = useState<Role | null>(null);
     const [deletingItem, setDeletingItem] = useState<Role | null>(null);
 
-    const handleSave = (data: Partial<Role>) => {
+    const flash = pageProps.flash;
+    if (flash?.success) toast.success(flash.success);
+    if (flash?.error)   toast.error(flash.error);
+
+    const permGroups = [...new Set(allPermissions.map((p) => p.group))];
+
+    const handleSave = (data: Partial<Role> & { permission_ids?: number[] }) => {
         if (editingItem) {
-            setRoles((p) => p.map((r) => (r.id === editingItem.id ? { ...r, ...data } : r)));
+            router.put(route('admin.roles.update', editingItem.id), data, {
+                onSuccess: () => {
+                    toast.success('Role berhasil diperbarui.');
+                    setIsFormOpen(false);
+                    setEditingItem(null);
+                },
+                onError: (errors) => toast.error('Gagal memperbarui role.', { description: Object.values(errors).join(', ') }),
+            });
         } else {
-            setRoles((p) => [...p, { ...data, id: Date.now(), users_count: 0, is_system: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Role]);
+            router.post(route('admin.roles.store'), data, {
+                onSuccess: () => {
+                    toast.success('Role berhasil ditambahkan.');
+                    setIsFormOpen(false);
+                },
+                onError: (errors) => toast.error('Gagal menambahkan role.', { description: Object.values(errors).join(', ') }),
+            });
         }
-        setIsFormOpen(false);
-        setEditingItem(null);
+    };
+
+    const handleDelete = () => {
+        if (!deletingItem) return;
+        router.delete(route('admin.roles.destroy', deletingItem.id), {
+            onSuccess: () => {
+                toast.success(`Role "${deletingItem.label}" berhasil dihapus.`);
+                setDeletingItem(null);
+            },
+            onError: () => toast.error('Gagal menghapus role.'),
+        });
     };
 
     return (
@@ -259,13 +225,10 @@ export default function RolesIndex() {
                             </div>
                             Role & Permissions
                         </h1>
-                        <p className="text-muted-foreground text-sm mt-1">
-                            Kelola peran dan hak akses pengguna sistem
-                        </p>
+                        <p className="text-muted-foreground text-sm mt-1">Kelola peran dan hak akses pengguna sistem</p>
                     </div>
                     <Button onClick={() => { setEditingItem(null); setIsFormOpen(true); }} className="gap-2 shrink-0">
-                        <Plus className="h-4 w-4" />
-                        Tambah Role
+                        <Plus className="h-4 w-4" /> Tambah Role
                     </Button>
                 </div>
 
@@ -275,6 +238,7 @@ export default function RolesIndex() {
                         <RoleCard
                             key={role.id}
                             role={role}
+                            allPermissions={allPermissions}
                             onEdit={() => { setEditingItem(role); setIsFormOpen(true); }}
                             onDelete={() => setDeletingItem(role)}
                         />
@@ -315,7 +279,7 @@ export default function RolesIndex() {
                         </CardContent>
                     </Card>
 
-                    {/* Matrix rows by group */}
+                    {/* Matrix rows */}
                     <div className="space-y-2">
                         {permGroups.map((group) => (
                             <PermissionMatrixRow
@@ -339,7 +303,7 @@ export default function RolesIndex() {
             <DeleteConfirmDialog
                 open={!!deletingItem}
                 onClose={() => setDeletingItem(null)}
-                onConfirm={() => { setRoles((p) => p.filter((r) => r.id !== deletingItem?.id)); setDeletingItem(null); }}
+                onConfirm={handleDelete}
                 title="Hapus Role"
                 description={`Hapus role "${deletingItem?.label}"? User dengan role ini tidak akan bisa login.`}
             />

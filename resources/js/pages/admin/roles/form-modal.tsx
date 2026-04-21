@@ -11,7 +11,7 @@ import type { Role, Permission } from '@/types';
 interface RoleFormModalProps {
     open: boolean;
     onClose: () => void;
-    onSave: (data: Partial<Role>) => void;
+    onSave: (data: Partial<Role> & { permission_ids?: number[] }) => void;
     initialData?: Role | null;
     allPermissions: Permission[];
 }
@@ -63,8 +63,7 @@ export default function RoleFormModal({ open, onClose, onSave, initialData, allP
     const handleSubmit = (ev: React.FormEvent) => {
         ev.preventDefault();
         if (!validate()) return;
-        const perms = allPermissions.filter((p) => selectedPerms.includes(p.id));
-        onSave({ ...form, permissions: perms });
+        onSave({ ...form, permission_ids: selectedPerms });
     };
 
     const colorOptions = [

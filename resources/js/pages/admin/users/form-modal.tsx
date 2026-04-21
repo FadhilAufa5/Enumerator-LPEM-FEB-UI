@@ -5,37 +5,45 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { AppUser } from '@/types';
+import type { AppUser, Role } from '@/types';
 
 interface UserFormModalProps {
     open: boolean;
     onClose: () => void;
-    onSave: (data: Partial<AppUser>) => void;
+    onSave: (data: Partial<AppUser> & { password?: string; role_id?: number }) => void;
     initialData?: AppUser | null;
+    roles: Pick<Role, 'id' | 'name' | 'label' | 'color' | 'is_system'>[];
 }
 
-const mockRoles = [
-    { id: 1, name: 'admin',      label: 'Administrator', color: 'violet', permissions: [], is_system: true,  created_at: '', updated_at: '' },
-    { id: 2, name: 'supervisor', label: 'Supervisor',    color: 'blue',   permissions: [], is_system: false, created_at: '', updated_at: '' },
-    { id: 3, name: 'operator',   label: 'Operator',      color: 'emerald',permissions: [], is_system: false, created_at: '', updated_at: '' },
-    { id: 4, name: 'viewer',     label: 'Viewer',        color: 'slate',  permissions: [], is_system: false, created_at: '', updated_at: '' },
-];
+type FormState = {
+    name: string;
+    email: string;
+    status: AppUser['status'];
+    role_id: string;
+    password: string;
+};
 
-const defaultForm = {
+const defaultForm: FormState = {
     name: '',
     email: '',
-    status: 'active' as AppUser['status'],
-    role: mockRoles[2], // default: operator
+    status: 'active',
+    role_id: '',
     password: '',
 };
 
-export default function UserFormModal({ open, onClose, onSave, initialData }: UserFormModalProps) {
-    const [form, setForm] = useState(defaultForm);
+export default function UserFormModal({ open, onClose, onSave, initialData, roles }: UserFormModalProps) {
+    const [form, setForm]     = useState<FormState>(defaultForm);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (initialData) {
-            setForm({ name: initialData.name, email: initialData.email, status: initialData.status, role: initialData.role, password: '' });
+            setForm({
+                name:    initialData.name,
+                email:   initialData.email,
+                status:  initialData.status ?? 'active',
+                role_id: initialData.role?.id?.toString() ?? '',
+                password: '',
+            });
         } else {
             setForm({ ...defaultForm });
         }
@@ -44,16 +52,23 @@ export default function UserFormModal({ open, onClose, onSave, initialData }: Us
 
     const validate = () => {
         const e: Record<string, string> = {};
-        if (!form.name.trim())                          e.name  = 'Nama wajib diisi';
+        if (!form.name.trim())                           e.name     = 'Nama wajib diisi';
         if (!form.email.trim() || !form.email.includes('@')) e.email = 'Email tidak valid';
-        if (!initialData && form.password.length < 8)  e.password = 'Password minimal 8 karakter';
+        if (!initialData && form.password.length < 8)   e.password  = 'Password minimal 8 karakter';
         setErrors(e);
         return Object.keys(e).length === 0;
     };
 
     const handleSubmit = (ev: React.FormEvent) => {
         ev.preventDefault();
-        if (validate()) onSave({ name: form.name, email: form.email, status: form.status, role: form.role });
+        if (!validate()) return;
+        onSave({
+            name:     form.name,
+            email:    form.email,
+            status:   form.status,
+            role_id:  form.role_id ? Number(form.role_id) : undefined,
+            password: form.password || undefined,
+        });
     };
 
     return (
@@ -75,29 +90,35 @@ export default function UserFormModal({ open, onClose, onSave, initialData }: Us
                     {/* Nama */}
                     <div className="space-y-1.5">
                         <Label htmlFor="u-name">Nama Lengkap <span className="text-destructive">*</span></Label>
-                        <Input id="u-name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                            placeholder="Nama pengguna" className={errors.name ? 'border-destructive' : ''} />
+                        <Input id="u-name" value={form.name}
+                            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                            placeholder="Nama pengguna"
+                            className={errors.name ? 'border-destructive' : ''} />
                         {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                     </div>
 
                     {/* Email */}
                     <div className="space-y-1.5">
                         <Label htmlFor="u-email">Email <span className="text-destructive">*</span></Label>
-                        <Input id="u-email" type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                            placeholder="user@email.com" className={errors.email ? 'border-destructive' : ''} />
+                        <Input id="u-email" type="email" value={form.email}
+                            onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                            placeholder="user@email.com"
+                            className={errors.email ? 'border-destructive' : ''} />
                         {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                     </div>
 
-                    {/* Password – hanya untuk tambah baru */}
-                    {!initialData && (
-                        <div className="space-y-1.5">
-                            <Label htmlFor="u-password">Password <span className="text-destructive">*</span></Label>
-                            <Input id="u-password" type="password" value={form.password}
-                                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-                                placeholder="Min. 8 karakter" className={errors.password ? 'border-destructive' : ''} />
-                            {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
-                        </div>
-                    )}
+                    {/* Password — hanya saat tambah; kosong = tidak diubah */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="u-password">
+                            Password {!initialData && <span className="text-destructive">*</span>}
+                            {initialData && <span className="text-xs text-muted-foreground ml-1">(kosongkan jika tidak diubah)</span>}
+                        </Label>
+                        <Input id="u-password" type="password" value={form.password}
+                            onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                            placeholder="Min. 8 karakter"
+                            className={errors.password ? 'border-destructive' : ''} />
+                        {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+                    </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         {/* Role */}
@@ -106,12 +127,12 @@ export default function UserFormModal({ open, onClose, onSave, initialData }: Us
                                 <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
                                 Role
                             </Label>
-                            <Select
-                                value={form.role.name}
-                                onValueChange={(v) => setForm((p) => ({ ...p, role: mockRoles.find((r) => r.name === v) ?? mockRoles[2] }))}>
-                                <SelectTrigger id="u-role"><SelectValue /></SelectTrigger>
+                            <Select value={form.role_id} onValueChange={(v) => setForm((p) => ({ ...p, role_id: v }))}>
+                                <SelectTrigger id="u-role"><SelectValue placeholder="Pilih role" /></SelectTrigger>
                                 <SelectContent>
-                                    {mockRoles.map((r) => <SelectItem key={r.name} value={r.name}>{r.label}</SelectItem>)}
+                                    {roles.map((r) => (
+                                        <SelectItem key={r.id} value={r.id.toString()}>{r.label}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>

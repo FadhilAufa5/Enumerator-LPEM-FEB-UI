@@ -1,22 +1,9 @@
 import { useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import {
-    Users,
-    Plus,
-    Search,
-    Filter,
-    MoreHorizontal,
-    Pencil,
-    Trash2,
-    ShieldCheck,
-    UserCheck,
-    UserX,
-    UserMinus,
-    Mail,
-    Clock,
-    CheckCircle2,
-    XCircle,
-    AlertCircle,
+    Users, Plus, Search, MoreHorizontal, Pencil, Trash2,
+    ShieldCheck, UserCheck, UserX, UserMinus, Mail, Clock,
+    CheckCircle2, XCircle, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,44 +11,28 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+    DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { AppUser, UserStatus } from '@/types';
+import { toast } from 'sonner';
+import type { AppUser, Role, UserStatus } from '@/types';
 import UserFormModal from './form-modal';
 import DeleteConfirmDialog from '@/components/admin/delete-confirm-dialog';
 
-// ── Mock data ──────────────────────────────────────────────
-const mockRoles = {
-    admin:      { id: 1, name: 'admin',      label: 'Administrator', color: 'violet', permissions: [], users_count: 2, is_system: true,  created_at: '', updated_at: '' },
-    supervisor: { id: 2, name: 'supervisor', label: 'Supervisor',    color: 'blue',   permissions: [], users_count: 5, is_system: false, created_at: '', updated_at: '' },
-    operator:   { id: 3, name: 'operator',   label: 'Operator',      color: 'emerald',permissions: [], users_count: 12, is_system: false, created_at: '', updated_at: '' },
-    viewer:     { id: 4, name: 'viewer',     label: 'Viewer',        color: 'slate',  permissions: [], users_count: 8, is_system: false, created_at: '', updated_at: '' },
-};
-
-const mockUsers: AppUser[] = [
-    { id: 1, name: 'Super Admin',    email: 'admin@enumapp.id',      status: 'active',    role: mockRoles.admin,      last_login: '2025-04-20T07:30:00Z', email_verified_at: '2025-01-01', created_at: '2025-01-01', updated_at: '2025-01-01' },
-    { id: 2, name: 'Budi Koordinator', email: 'budi.koor@enumapp.id', status: 'active',   role: mockRoles.supervisor,  last_login: '2025-04-20T06:15:00Z', email_verified_at: '2025-01-05', created_at: '2025-01-05', updated_at: '2025-01-05' },
-    { id: 3, name: 'Sari Operator',  email: 'sari@enumapp.id',       status: 'active',    role: mockRoles.operator,    last_login: '2025-04-19T14:00:00Z', email_verified_at: '2025-02-01', created_at: '2025-02-01', updated_at: '2025-02-01' },
-    { id: 4, name: 'Dian Viewer',    email: 'dian@enumapp.id',       status: 'active',    role: mockRoles.viewer,      last_login: '2025-04-18T09:00:00Z', email_verified_at: '2025-02-15', created_at: '2025-02-15', updated_at: '2025-02-15' },
-    { id: 5, name: 'Rudi Suspended', email: 'rudi@enumapp.id',       status: 'suspended', role: mockRoles.operator,    last_login: '2025-03-01T10:00:00Z', email_verified_at: '2025-01-20', created_at: '2025-01-20', updated_at: '2025-03-15' },
-    { id: 6, name: 'Nina Inactive',  email: 'nina@enumapp.id',       status: 'inactive',  role: mockRoles.viewer,      last_login: undefined,              email_verified_at: null,         created_at: '2025-03-01', updated_at: '2025-03-01' },
-    { id: 7, name: 'Andi Supervisor',email: 'andi@enumapp.id',       status: 'active',    role: mockRoles.supervisor,  last_login: '2025-04-20T08:00:00Z', email_verified_at: '2025-01-10', created_at: '2025-01-10', updated_at: '2025-01-10' },
-];
+// ── Props from Inertia ─────────────────────────────────────
+interface Props {
+    users: AppUser[];
+    roles: Pick<Role, 'id' | 'name' | 'label' | 'color' | 'is_system'>[];
+}
 
 // ── Status config ──────────────────────────────────────────
-const statusCfg: Record<UserStatus, { label: string; icon: React.ElementType; badge: 'default'|'secondary'|'destructive'|'outline'; dot: string }> = {
-    active:    { label: 'Aktif',     icon: CheckCircle2, badge: 'default',     dot: 'bg-emerald-500' },
-    inactive:  { label: 'Tidak Aktif', icon: XCircle,   badge: 'secondary',   dot: 'bg-slate-400'   },
-    suspended: { label: 'Suspended', icon: AlertCircle,  badge: 'destructive', dot: 'bg-red-500'     },
+const statusCfg: Record<UserStatus, { label: string; icon: React.ElementType; badge: 'default' | 'secondary' | 'destructive' | 'outline'; dot: string }> = {
+    active:    { label: 'Aktif',       icon: CheckCircle2, badge: 'default',     dot: 'bg-emerald-500' },
+    inactive:  { label: 'Tidak Aktif', icon: XCircle,      badge: 'secondary',   dot: 'bg-slate-400'   },
+    suspended: { label: 'Suspended',   icon: AlertCircle,  badge: 'destructive', dot: 'bg-red-500'     },
 };
 
-// ── Role badge color map ───────────────────────────────────
 const roleBg: Record<string, string> = {
     violet:  'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
     blue:    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
@@ -70,6 +41,7 @@ const roleBg: Record<string, string> = {
 };
 
 function RoleBadge({ role }: { role: AppUser['role'] }) {
+    if (!role) return <span className="text-xs text-muted-foreground">—</span>;
     return (
         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${roleBg[role.color] ?? roleBg.slate}`}>
             <ShieldCheck className="h-3 w-3" />
@@ -88,19 +60,25 @@ function timeAgo(date?: string) {
     return `${Math.floor(hours / 24)} hari lalu`;
 }
 
-export default function UserIndex() {
-    const [users, setUsers]           = useState<AppUser[]>(mockUsers);
-    const [search, setSearch]         = useState('');
-    const [roleFilter, setRoleFilter] = useState('all');
+export default function UserIndex({ users, roles }: Props) {
+    const { props: pageProps } = usePage<{ flash?: { success?: string; error?: string } }>();
+
+    const [search, setSearch]           = useState('');
+    const [roleFilter, setRoleFilter]   = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [isFormOpen, setIsFormOpen] = useState(false);
-    const [editingItem, setEditingItem]   = useState<AppUser | null>(null);
+    const [isFormOpen, setIsFormOpen]   = useState(false);
+    const [editingItem, setEditingItem] = useState<AppUser | null>(null);
     const [deletingItem, setDeletingItem] = useState<AppUser | null>(null);
+
+    // Show flash messages as toasts
+    const flash = pageProps.flash;
+    if (flash?.success) toast.success(flash.success);
+    if (flash?.error)   toast.error(flash.error);
 
     const filtered = users.filter((u) => {
         const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
-        const matchRole   = roleFilter   === 'all' || u.role.name === roleFilter;
-        const matchStatus = statusFilter === 'all' || u.status   === statusFilter;
+        const matchRole   = roleFilter   === 'all' || u.role?.name === roleFilter;
+        const matchStatus = statusFilter === 'all' || u.status === statusFilter;
         return matchSearch && matchRole && matchStatus;
     });
 
@@ -111,14 +89,47 @@ export default function UserIndex() {
         inactive:  users.filter((u) => u.status === 'inactive').length,
     };
 
-    const handleSave = (data: Partial<AppUser>) => {
+    const handleSave = (data: Partial<AppUser> & { password?: string; role_id?: number }) => {
         if (editingItem) {
-            setUsers((prev) => prev.map((u) => (u.id === editingItem.id ? { ...u, ...data } : u)));
+            router.put(route('admin.users.update', editingItem.id), data, {
+                onSuccess: () => {
+                    toast.success('User berhasil diperbarui.');
+                    setIsFormOpen(false);
+                    setEditingItem(null);
+                },
+                onError: (errors) => {
+                    toast.error('Gagal memperbarui user.', { description: Object.values(errors).join(', ') });
+                },
+            });
         } else {
-            setUsers((prev) => [...prev, { ...data, id: Date.now(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as AppUser]);
+            router.post(route('admin.users.store'), data, {
+                onSuccess: () => {
+                    toast.success('User berhasil ditambahkan.');
+                    setIsFormOpen(false);
+                },
+                onError: (errors) => {
+                    toast.error('Gagal menambahkan user.', { description: Object.values(errors).join(', ') });
+                },
+            });
         }
-        setIsFormOpen(false);
-        setEditingItem(null);
+    };
+
+    const handleStatusChange = (user: AppUser, status: UserStatus) => {
+        router.patch(route('admin.users.status', user.id), { status }, {
+            onSuccess: () => toast.success(`Status user diubah ke "${statusCfg[status].label}".`),
+            onError:   () => toast.error('Gagal mengubah status.'),
+        });
+    };
+
+    const handleDelete = () => {
+        if (!deletingItem) return;
+        router.delete(route('admin.users.destroy', deletingItem.id), {
+            onSuccess: () => {
+                toast.success(`User "${deletingItem.name}" berhasil dihapus.`);
+                setDeletingItem(null);
+            },
+            onError: () => toast.error('Gagal menghapus user.'),
+        });
     };
 
     return (
@@ -135,23 +146,20 @@ export default function UserIndex() {
                             </div>
                             Manajemen User
                         </h1>
-                        <p className="text-muted-foreground text-sm mt-1">
-                            Kelola akun pengguna dan hak akses sistem
-                        </p>
+                        <p className="text-muted-foreground text-sm mt-1">Kelola akun pengguna dan hak akses sistem</p>
                     </div>
                     <Button onClick={() => { setEditingItem(null); setIsFormOpen(true); }} className="gap-2 shrink-0">
-                        <Plus className="h-4 w-4" />
-                        Tambah User
+                        <Plus className="h-4 w-4" /> Tambah User
                     </Button>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[
-                        { label: 'Total User',    value: stats.total,     icon: Users,     bg: 'bg-violet-50 dark:bg-violet-900/20',  color: 'text-violet-600'  },
-                        { label: 'Aktif',         value: stats.active,    icon: UserCheck, bg: 'bg-emerald-50 dark:bg-emerald-900/20', color: 'text-emerald-600' },
-                        { label: 'Suspended',     value: stats.suspended, icon: UserMinus, bg: 'bg-red-50 dark:bg-red-900/20',         color: 'text-red-600'     },
-                        { label: 'Tidak Aktif',   value: stats.inactive,  icon: UserX,     bg: 'bg-slate-50 dark:bg-slate-800/50',     color: 'text-slate-500'   },
+                        { label: 'Total User',  value: stats.total,     icon: Users,     bg: 'bg-violet-50 dark:bg-violet-900/20',  color: 'text-violet-600'  },
+                        { label: 'Aktif',       value: stats.active,    icon: UserCheck, bg: 'bg-emerald-50 dark:bg-emerald-900/20', color: 'text-emerald-600' },
+                        { label: 'Suspended',   value: stats.suspended, icon: UserMinus, bg: 'bg-red-50 dark:bg-red-900/20',         color: 'text-red-600'     },
+                        { label: 'Tidak Aktif', value: stats.inactive,  icon: UserX,     bg: 'bg-slate-50 dark:bg-slate-800/50',     color: 'text-slate-500'   },
                     ].map((s) => (
                         <Card key={s.label} className={`${s.bg} border-0 transition-all hover:scale-105`}>
                             <CardContent className="p-4">
@@ -175,7 +183,7 @@ export default function UserIndex() {
                                 <SelectTrigger className="w-[160px]"><SelectValue placeholder="Semua Role" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">Semua Role</SelectItem>
-                                    {Object.values(mockRoles).map((r) => <SelectItem key={r.name} value={r.name}>{r.label}</SelectItem>)}
+                                    {roles.map((r) => <SelectItem key={r.name} value={r.name}>{r.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -221,10 +229,9 @@ export default function UserIndex() {
                                             </td>
                                         </tr>
                                     ) : filtered.map((user) => {
-                                        const sc = statusCfg[user.status];
+                                        const sc = statusCfg[user.status ?? 'active'];
                                         return (
                                             <tr key={user.id} className="border-b transition-colors hover:bg-muted/30 group">
-                                                {/* User */}
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-3">
                                                         <div className="relative shrink-0">
@@ -243,32 +250,25 @@ export default function UserIndex() {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                {/* Role */}
-                                                <td className="px-4 py-3">
-                                                    <RoleBadge role={user.role} />
-                                                </td>
-                                                {/* Status */}
+                                                <td className="px-4 py-3"><RoleBadge role={user.role} /></td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-1.5">
                                                         <sc.icon className="h-3.5 w-3.5 text-muted-foreground" />
                                                         <Badge variant={sc.badge}>{sc.label}</Badge>
                                                     </div>
                                                 </td>
-                                                {/* Verifikasi */}
                                                 <td className="px-4 py-3">
                                                     {user.email_verified_at
                                                         ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> Terverifikasi</span>
                                                         : <span className="inline-flex items-center gap-1 text-xs text-orange-500"><AlertCircle className="h-3.5 w-3.5" /> Belum</span>
                                                     }
                                                 </td>
-                                                {/* Login terakhir */}
                                                 <td className="px-4 py-3 text-xs text-muted-foreground">
                                                     <div className="flex items-center gap-1">
                                                         <Clock className="h-3 w-3" />
                                                         {timeAgo(user.last_login)}
                                                     </div>
                                                 </td>
-                                                {/* Aksi */}
                                                 <td className="px-4 py-3 text-center">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
@@ -284,20 +284,20 @@ export default function UserIndex() {
                                                             </DropdownMenuItem>
                                                             {user.status === 'active' && (
                                                                 <DropdownMenuItem className="gap-2 text-orange-600 focus:text-orange-600"
-                                                                    onClick={() => setUsers((p) => p.map((u) => u.id === user.id ? { ...u, status: 'suspended' } : u))}>
+                                                                    onClick={() => handleStatusChange(user, 'suspended')}>
                                                                     <UserMinus className="h-4 w-4" /> Suspend
                                                                 </DropdownMenuItem>
                                                             )}
                                                             {user.status === 'suspended' && (
                                                                 <DropdownMenuItem className="gap-2 text-emerald-600 focus:text-emerald-600"
-                                                                    onClick={() => setUsers((p) => p.map((u) => u.id === user.id ? { ...u, status: 'active' } : u))}>
+                                                                    onClick={() => handleStatusChange(user, 'active')}>
                                                                     <UserCheck className="h-4 w-4" /> Aktifkan
                                                                 </DropdownMenuItem>
                                                             )}
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive"
                                                                 onClick={() => setDeletingItem(user)}
-                                                                disabled={user.role.is_system && user.id === 1}>
+                                                                disabled={!!user.role?.is_system && user.id === 1}>
                                                                 <Trash2 className="h-4 w-4" /> Hapus
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
@@ -313,11 +313,17 @@ export default function UserIndex() {
                 </Card>
             </div>
 
-            <UserFormModal open={isFormOpen} onClose={() => { setIsFormOpen(false); setEditingItem(null); }} onSave={handleSave} initialData={editingItem} />
+            <UserFormModal
+                open={isFormOpen}
+                onClose={() => { setIsFormOpen(false); setEditingItem(null); }}
+                onSave={handleSave}
+                initialData={editingItem}
+                roles={roles}
+            />
             <DeleteConfirmDialog
                 open={!!deletingItem}
                 onClose={() => setDeletingItem(null)}
-                onConfirm={() => { setUsers((p) => p.filter((u) => u.id !== deletingItem?.id)); setDeletingItem(null); }}
+                onConfirm={handleDelete}
                 title="Hapus User"
                 description={`Hapus akun "${deletingItem?.name}"? Semua data terkait akan ikut terhapus.`}
             />
