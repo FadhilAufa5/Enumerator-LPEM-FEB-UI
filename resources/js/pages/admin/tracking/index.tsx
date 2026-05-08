@@ -1,34 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Head } from '@inertiajs/react';
 import {
-    Map as MapIcon,
-    Search,
-    Filter,
-    Battery,
-    BatteryFull,
-    BatteryMedium,
-    BatteryLow,
-    Signal,
-    SignalHigh,
-    SignalMedium,
-    SignalLow,
-    WifiOff,
-    Navigation,
-    Clock,
-    Crosshair,
-    MapPin,
-    AlertCircle,
-    UserCircle2,
-    RefreshCw,
+    Map as MapIcon, Search, BatteryFull, BatteryMedium, BatteryLow,
+    SignalHigh, SignalMedium, SignalLow, WifiOff, Navigation,
+    Clock, Crosshair, MapPin, AlertCircle, RefreshCw,
+    Users, Activity, Radio,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// ── Mock Data ──────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────
 interface TrackingData {
     id: number;
     name: string;
@@ -37,19 +21,27 @@ interface TrackingData {
     last_update: string;
     battery: number;
     signal: 'high' | 'medium' | 'low' | 'none';
-    coord: { x: number; y: number }; // Percentage for CSS positioning inside map container
+    lat: number;
+    lng: number;
 }
 
-const mockTrackings: TrackingData[] = [
-    { id: 1, name: 'Ahmad Fauzi',   wilayah: 'Kel. Sukamaju',   status: 'moving',  last_update: 'Baru saja', battery: 85, signal: 'high',   coord: { x: 35, y: 42 } },
-    { id: 2, name: 'Siti Rahayu',   wilayah: 'Kel. Mekarjaya',  status: 'idle',    last_update: '2 mnt lalu',battery: 62, signal: 'medium', coord: { x: 65, y: 28 } },
-    { id: 3, name: 'Budi Santoso',  wilayah: 'Desa Cibadak',    status: 'moving',  last_update: '1 mnt lalu',battery: 91, signal: 'high',   coord: { x: 48, y: 65 } },
-    { id: 4, name: 'Dewi Lestari',  wilayah: 'Kel. Margahayu',  status: 'offline', last_update: '1 jam lalu',battery: 15, signal: 'none',   coord: { x: 75, y: 72 } },
-    { id: 5, name: 'Rizki Pratama', wilayah: 'Desa Karanganyar',status: 'moving',  last_update: 'Baru saja', battery: 43, signal: 'low',    coord: { x: 22, y: 78 } },
-    { id: 6, name: 'Putri Amalia',  wilayah: 'Kel. Sukamaju',   status: 'idle',    last_update: '5 mnt lalu',battery: 78, signal: 'high',   coord: { x: 40, y: 38 } },
+// ── Mock Data (coordinates around Jakarta) ─────────────────
+const INITIAL_DATA: TrackingData[] = [
+    { id: 1, name: 'Ahmad Fauzi',   wilayah: 'Kel. Sukamaju',    status: 'moving',  last_update: 'Baru saja',  battery: 85, signal: 'high',   lat: -6.2088, lng: 106.8456 },
+    { id: 2, name: 'Siti Rahayu',   wilayah: 'Kel. Mekarjaya',   status: 'idle',    last_update: '2 mnt lalu', battery: 62, signal: 'medium', lat: -6.1944, lng: 106.8229 },
+    { id: 3, name: 'Budi Santoso',  wilayah: 'Desa Cibadak',     status: 'moving',  last_update: '1 mnt lalu', battery: 91, signal: 'high',   lat: -6.2615, lng: 106.7811 },
+    { id: 4, name: 'Dewi Lestari',  wilayah: 'Kel. Margahayu',   status: 'offline', last_update: '1 jam lalu', battery: 15, signal: 'none',   lat: -6.2297, lng: 106.9011 },
+    { id: 5, name: 'Rizki Pratama', wilayah: 'Desa Karanganyar', status: 'moving',  last_update: 'Baru saja',  battery: 43, signal: 'low',    lat: -6.3004, lng: 106.8521 },
+    { id: 6, name: 'Putri Amalia',  wilayah: 'Kel. Sukamaju',    status: 'idle',    last_update: '5 mnt lalu', battery: 78, signal: 'high',   lat: -6.1751, lng: 106.8650 },
 ];
 
-// Helper icon components based on status
+const STATUS_CFG = {
+    moving:  { label: 'Bergerak', color: '#10b981', ring: 'ring-emerald-500', text: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200' },
+    idle:    { label: 'Diam',     color: '#f59e0b', ring: 'ring-amber-500',   text: 'text-amber-600',   bg: 'bg-amber-50 dark:bg-amber-950/30',       border: 'border-amber-200'   },
+    offline: { label: 'Offline',  color: '#94a3b8', ring: 'ring-slate-400',   text: 'text-slate-500',   bg: 'bg-slate-50 dark:bg-slate-900/30',       border: 'border-slate-200'   },
+};
+
+// ── Sub-components ─────────────────────────────────────────
 const BatteryIcon = ({ level }: { level: number }) => {
     if (level > 70) return <BatteryFull className="h-3.5 w-3.5 text-emerald-500" />;
     if (level > 30) return <BatteryMedium className="h-3.5 w-3.5 text-orange-500" />;
@@ -57,246 +49,444 @@ const BatteryIcon = ({ level }: { level: number }) => {
 };
 
 const SignalIcon = ({ type }: { type: TrackingData['signal'] }) => {
-    if (type === 'high') return <SignalHigh className="h-3.5 w-3.5 text-blue-500" />;
-    if (type === 'medium') return <SignalMedium className="h-3.5 w-3.5 text-orange-500" />;
-    if (type === 'low') return <SignalLow className="h-3.5 w-3.5 text-red-500" />;
-    return <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />;
+    if (type === 'high')   return <SignalHigh   className="h-3.5 w-3.5 text-blue-500"            />;
+    if (type === 'medium') return <SignalMedium className="h-3.5 w-3.5 text-orange-500"          />;
+    if (type === 'low')    return <SignalLow    className="h-3.5 w-3.5 text-red-500"             />;
+    return                        <WifiOff      className="h-3.5 w-3.5 text-muted-foreground"    />;
 };
 
-const statusConfig = {
-    moving:  { label: 'Bergerak', color: 'text-emerald-500', bg: 'bg-emerald-500', icon: Navigation },
-    idle:    { label: 'Diam',     color: 'text-orange-500',  bg: 'bg-orange-500',  icon: MapPin },
-    offline: { label: 'Offline',  color: 'text-slate-500',   bg: 'bg-slate-500',   icon: AlertCircle },
-};
+// ── LiveMap (loads Leaflet lazily, avoids SSR issues) ──────
+function LiveMap({
+    trackings,
+    trails,
+    selectedId,
+    onSelect,
+}: {
+    trackings: TrackingData[];
+    trails: Record<number, [number, number][]>;
+    selectedId: number | null;
+    onSelect: (id: number) => void;
+}) {
+    const mapRef = useRef<HTMLDivElement>(null);
+    const leafletMap = useRef<ReturnType<typeof import('leaflet')['map']> | null>(null);
+    const markersRef = useRef<Map<number, any>>(new Map());
+    const polylinesRef = useRef<Map<number, any>>(new Map());
 
+    // Boot Leaflet once
+    useEffect(() => {
+        if (!mapRef.current || leafletMap.current) return;
+
+        let L: typeof import('leaflet');
+
+        (async () => {
+            L = await import('leaflet');
+            await import('leaflet/dist/leaflet.css');
+
+            const map = L.map(mapRef.current!, {
+                center: [-6.2300, 106.8300],
+                zoom: 12,
+                zoomControl: false,
+            });
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                maxZoom: 19,
+            }).addTo(map);
+
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            leafletMap.current = map;
+
+            // Initial markers
+            trackings.forEach((t) => {
+                const marker = L.marker([t.lat, t.lng], {
+                    icon: makeIcon(L, t),
+                }).addTo(map);
+
+                marker.on('click', () => onSelect(t.id));
+                markersRef.current.set(t.id, marker);
+            });
+        })();
+
+        return () => {
+            if (leafletMap.current) {
+                leafletMap.current.remove();
+                leafletMap.current = null;
+            }
+        };
+    }, []); // eslint-disable-line
+
+    // Update marker positions
+    useEffect(() => {
+        if (!leafletMap.current) return;
+        (async () => {
+            const L = await import('leaflet');
+            trackings.forEach((t) => {
+                const marker = markersRef.current.get(t.id);
+                if (marker) {
+                    marker.setLatLng([t.lat, t.lng]);
+                    marker.setIcon(makeIcon(L, t, selectedId === t.id));
+                }
+            });
+        })();
+    }, [trackings, selectedId]);
+
+    // Draw trails
+    useEffect(() => {
+        if (!leafletMap.current) return;
+        (async () => {
+            const L = await import('leaflet');
+            Object.entries(trails).forEach(([idStr, pts]) => {
+                const id = Number(idStr);
+                const existing = polylinesRef.current.get(id);
+                if (existing) existing.remove();
+
+                if (pts.length < 2) return;
+                const track = trackings.find((t) => t.id === id);
+                if (!track || track.status === 'offline') return;
+
+                const line = L.polyline(pts, {
+                    color: STATUS_CFG[track.status].color,
+                    weight: 2.5,
+                    opacity: 0.6,
+                    dashArray: track.status === 'idle' ? '5,5' : undefined,
+                    smoothFactor: 1.5,
+                }).addTo(leafletMap.current!);
+
+                polylinesRef.current.set(id, line);
+            });
+        })();
+    }, [trails, trackings]);
+
+    // FlyTo selected
+    useEffect(() => {
+        if (!leafletMap.current || selectedId === null) return;
+        const t = trackings.find((x) => x.id === selectedId);
+        if (t) leafletMap.current.flyTo([t.lat, t.lng], 15, { duration: 1.2 });
+    }, [selectedId]); // eslint-disable-line
+
+    return <div ref={mapRef} className="h-full w-full z-0" />;
+}
+
+function makeIcon(L: typeof import('leaflet'), t: TrackingData, selected = false) {
+    const color = STATUS_CFG[t.status].color;
+    const initials = t.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase();
+    const pulse = t.status === 'moving' ? `
+        <span style="position:absolute;inset:-4px;border-radius:50%;background:${color};opacity:0.25;animation:trackPulse 1.8s ease-out infinite;"></span>` : '';
+
+    const html = `
+        <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+            ${pulse}
+            <div style="
+                width:${selected ? 46 : 38}px;
+                height:${selected ? 46 : 38}px;
+                border-radius:50%;
+                background:white;
+                border:3px solid ${color};
+                display:flex;align-items:center;justify-content:center;
+                font-size:11px;font-weight:700;color:${color};
+                box-shadow:0 2px 12px rgba(0,0,0,0.2);
+                transition:all 0.3s;
+                ${selected ? `box-shadow:0 0 0 4px ${color}40,0 4px 16px rgba(0,0,0,0.3)` : ''}
+            ">${initials}</div>
+            <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid ${color};margin-top:-1px;"></div>
+        </div>`;
+
+    return L.divIcon({
+        html,
+        className: '',
+        iconSize: [selected ? 60 : 50, selected ? 70 : 60],
+        iconAnchor: [selected ? 30 : 25, selected ? 70 : 60],
+        popupAnchor: [0, -60],
+    });
+}
+
+// ── Main Page ──────────────────────────────────────────────
 export default function TrackingIndex() {
-    const [trackings, setTrackings] = useState<TrackingData[]>(mockTrackings);
+    const [trackings, setTrackings] = useState<TrackingData[]>(INITIAL_DATA);
+    const [trails, setTrails]       = useState<Record<number, [number, number][]>>(() =>
+        Object.fromEntries(INITIAL_DATA.map((t) => [t.id, [[t.lat, t.lng]]]))
+    );
     const [search, setSearch]       = useState('');
     const [filterStatus, setFilter] = useState('all');
     const [selectedId, setSelected] = useState<number | null>(null);
+    const [tick, setTick]           = useState(0);
+    const [lastRefresh, setLastRefresh] = useState(new Date());
 
-    // Simulate real-time movement randomly
+    const handleSelect = useCallback((id: number) => {
+        setSelected((prev) => (prev === id ? null : id));
+    }, []);
+
+    // ── Simulate Real-time Movement ──────────────────────
     useEffect(() => {
         const interval = setInterval(() => {
             setTrackings((prev) =>
                 prev.map((t) => {
                     if (t.status !== 'moving') return t;
-                    // Jitter coordinates naturally
-                    const dx = (Math.random() - 0.5) * 1.5;
-                    const dy = (Math.random() - 0.5) * 1.5;
+                    // Move ~20-80m in a random direction
+                    const dlat = (Math.random() - 0.5) * 0.0008;
+                    const dlng = (Math.random() - 0.5) * 0.0008;
                     return {
                         ...t,
-                        coord: {
-                            x: Math.min(Math.max(t.coord.x + dx, 5), 95),
-                            y: Math.min(Math.max(t.coord.y + dy, 5), 95),
-                        },
+                        lat: t.lat + dlat,
+                        lng: t.lng + dlng,
+                        last_update: 'Baru saja',
                     };
                 })
             );
+            setTick((n) => n + 1);
+            setLastRefresh(new Date());
         }, 3000);
         return () => clearInterval(interval);
     }, []);
 
+    // ── Accumulate trail points ────────────────────────────
+    useEffect(() => {
+        if (tick === 0) return;
+        setTrails((prev) => {
+            const next = { ...prev };
+            trackings.forEach((t) => {
+                if (t.status !== 'moving') return;
+                const history = prev[t.id] ?? [];
+                const updated = [...history, [t.lat, t.lng] as [number, number]];
+                next[t.id] = updated.slice(-30); // Keep last 30 points
+            });
+            return next;
+        });
+    }, [tick]); // eslint-disable-line
+
     const filtered = trackings.filter((t) => {
-        const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.wilayah.toLowerCase().includes(search.toLowerCase());
-        const matchFilter = filterStatus === 'all' || t.status === filterStatus;
-        return matchSearch && matchFilter;
+        const ms = t.name.toLowerCase().includes(search.toLowerCase()) ||
+                   t.wilayah.toLowerCase().includes(search.toLowerCase());
+        const mf = filterStatus === 'all' || t.status === filterStatus;
+        return ms && mf;
     });
 
-    const activeCount = trackings.filter(t => t.status !== 'offline').length;
+    const stats = {
+        total:   trackings.length,
+        moving:  trackings.filter((t) => t.status === 'moving').length,
+        idle:    trackings.filter((t) => t.status === 'idle').length,
+        offline: trackings.filter((t) => t.status === 'offline').length,
+    };
 
     return (
         <>
-            <Head title="Pemantauan GPS" />
-            <div className="flex h-full flex-col gap-4 p-4 lg:flex-row">
-                
-                {/* ── Left Sidebar: List Enumerator ── */}
-                <div className="flex w-full flex-col gap-4 lg:w-[380px] shrink-0">
-                    {/* Header */}
-                    <div>
-                        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-                            <div className="rounded-lg bg-blue-100 dark:bg-blue-900/30 p-1.5">
-                                <MapIcon className="h-5 w-5 text-blue-600" />
-                            </div>
-                            Pemantauan GPS
-                        </h1>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            {activeCount} dari {trackings.length} enumerator terhubung
-                        </p>
+            {/* Inject keyframe for pulse animation */}
+            <style>{`
+                @keyframes trackPulse {
+                    0%   { transform: scale(1);   opacity: 0.5; }
+                    100% { transform: scale(2.8); opacity: 0; }
+                }
+                .leaflet-container { font-family: inherit; }
+            `}</style>
+
+            <Head title="Live Tracking GPS" />
+            <div className="flex h-[calc(100vh-4rem)] flex-col gap-0 overflow-hidden">
+
+                {/* ── Top Bar ── */}
+                <div className="flex items-center justify-between gap-4 px-4 py-2 border-b bg-background shrink-0">
+                    <div className="flex items-center gap-2">
+                        <div className="rounded-lg bg-blue-100 dark:bg-blue-900/30 p-1.5">
+                            <MapIcon className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                            <h1 className="text-base font-bold leading-none">Live Tracking GPS</h1>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                                Update terakhir: {lastRefresh.toLocaleTimeString('id-ID')}
+                            </p>
+                        </div>
                     </div>
 
-                    <Card className="flex-1 flex flex-col overflow-hidden max-h-[calc(100vh-140px)]">
-                        <div className="p-3 border-b space-y-3 shrink-0">
+                    {/* Stat chips */}
+                    <div className="hidden sm:flex items-center gap-2">
+                        {[
+                            { label: 'Total', value: stats.total,   icon: Users,    cls: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+                            { label: 'Bergerak', value: stats.moving, icon: Navigation, cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+                            { label: 'Diam',    value: stats.idle,   icon: MapPin,   cls: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+                            { label: 'Offline', value: stats.offline,icon: AlertCircle, cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400' },
+                        ].map((s) => (
+                            <div key={s.label} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${s.cls}`}>
+                                <s.icon className="h-3 w-3" />
+                                {s.value} {s.label}
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {/* Live indicator */}
+                        <div className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">LIVE</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Body: Sidebar + Map ── */}
+                <div className="flex flex-1 overflow-hidden">
+
+                    {/* ── Left Sidebar ── */}
+                    <div className="flex w-[320px] shrink-0 flex-col border-r bg-background overflow-hidden">
+                        {/* Filters */}
+                        <div className="p-3 border-b space-y-2 shrink-0">
                             <div className="relative">
                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                                <Input placeholder="Cari nama / wilayah..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-9 text-xs" />
+                                <Input
+                                    placeholder="Cari nama / wilayah..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-8 h-8 text-xs"
+                                />
                             </div>
-                            <div className="flex gap-2">
-                                <Select value={filterStatus} onValueChange={setFilter}>
-                                    <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Semua Status" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Semua Status</SelectItem>
-                                        <SelectItem value="moving">Bergerak</SelectItem>
-                                        <SelectItem value="idle">Sedang Diam</SelectItem>
-                                        <SelectItem value="offline">Offline</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
-                                    <Filter className="h-3.5 w-3.5" />
-                                </Button>
-                            </div>
+                            <Select value={filterStatus} onValueChange={setFilter}>
+                                <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue placeholder="Semua Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Semua Status</SelectItem>
+                                    <SelectItem value="moving">Bergerak</SelectItem>
+                                    <SelectItem value="idle">Sedang Diam</SelectItem>
+                                    <SelectItem value="offline">Offline</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
-                        {/* List */}
-                        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                        {/* Enumerator list */}
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
                             {filtered.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground">
+                                <div className="text-center py-10 text-muted-foreground">
                                     <Crosshair className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                                    <p className="text-xs">Tidak ada data ditemukan</p>
+                                    <p className="text-xs">Tidak ada data</p>
                                 </div>
                             ) : filtered.map((item) => {
-                                const sc = statusConfig[item.status];
+                                const sc = STATUS_CFG[item.status];
                                 const isSelected = selectedId === item.id;
-                                
+
                                 return (
-                                    <div key={item.id}
-                                        onClick={() => setSelected(isSelected ? null : item.id)}
-                                        className={`p-3 rounded-lg border transition-all cursor-pointer hover:shadow-md
-                                            ${isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'bg-card hover:border-primary/50'}`}>
-                                        
-                                        <div className="flex justify-between items-start gap-2">
-                                            <div className="flex items-center gap-2.5 overflow-hidden">
-                                                <div className="relative shrink-0">
-                                                    <Avatar className="h-8 w-8">
-                                                        <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
-                                                            {item.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${sc.bg}`} />
-                                                    {item.status === 'moving' && (
-                                                        <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ${sc.bg} animate-ping opacity-75`} />
-                                                    )}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="font-semibold text-sm truncate">{item.name}</p>
-                                                    <p className="text-[10px] text-muted-foreground truncate">{item.wilayah}</p>
-                                                </div>
+                                    <div
+                                        key={item.id}
+                                        onClick={() => handleSelect(item.id)}
+                                        className={`p-3 rounded-xl border cursor-pointer transition-all duration-200 hover:shadow-md
+                                            ${isSelected
+                                                ? `border-primary bg-primary/5 ring-1 ring-primary/30 shadow-md`
+                                                : `bg-card hover:border-primary/40`
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            {/* Avatar with pulse */}
+                                            <div className="relative shrink-0">
+                                                <Avatar className="h-9 w-9">
+                                                    <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
+                                                        {item.name.split(' ').map((n) => n[0]).join('').substring(0, 2)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                {/* Status dot */}
+                                                <span
+                                                    className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background"
+                                                    style={{ background: sc.color }}
+                                                />
+                                                {item.status === 'moving' && (
+                                                    <span
+                                                        className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full animate-ping"
+                                                        style={{ background: sc.color, opacity: 0.6 }}
+                                                    />
+                                                )}
                                             </div>
-                                            
-                                            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 border shrink-0 ${sc.color} ${item.status==='moving'?'border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30':''}`}>
-                                                {sc.label}
-                                            </Badge>
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-1">
+                                                    <p className="font-semibold text-sm truncate leading-none">{item.name}</p>
+                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${sc.bg} ${sc.text}`}>
+                                                        {sc.label}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground truncate mt-0.5">{item.wilayah}</p>
+                                            </div>
                                         </div>
 
-                                        <div className="mt-3 flex items-center justify-between border-t pt-2.5">
+                                        {/* Details row */}
+                                        <div className="mt-2.5 flex items-center justify-between border-t pt-2">
                                             <div className="flex items-center gap-3">
-                                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground" title={`Baterai: ${item.battery}%`}>
+                                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                                                     <BatteryIcon level={item.battery} /> {item.battery}%
-                                                </div>
-                                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground" title="Sinyal Seluler">
-                                                    <SignalIcon type={item.signal} />
-                                                </div>
+                                                </span>
+                                                <SignalIcon type={item.signal} />
+                                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                    <Radio className="h-3 w-3" />
+                                                    {item.lat.toFixed(4)}, {item.lng.toFixed(4)}
+                                                </span>
                                             </div>
-                                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                                                 <Clock className="h-3 w-3" /> {item.last_update}
-                                            </div>
+                                            </span>
                                         </div>
+
+                                        {/* Trail info for moving */}
+                                        {item.status === 'moving' && (
+                                            <div className="mt-1.5 flex items-center gap-1 text-[9px] text-emerald-600 dark:text-emerald-400">
+                                                <Activity className="h-2.5 w-2.5 animate-pulse" />
+                                                <span>{(trails[item.id]?.length ?? 0)} titik jalur terekam</span>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
                         </div>
-                    </Card>
-                </div>
-
-                {/* ── Right Side: Map Visualization ── */}
-                <Card className="flex-1 relative overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950/20 shadow-inner border-2">
-                    {/* Header Tools */}
-                    <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-10 pointer-events-none">
-                        <div className="bg-background/80 backdrop-blur pointer-events-auto shadow-sm border rounded-lg p-2 px-3 flex items-center gap-2">
-                            <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                            </span>
-                            <span className="text-xs font-semibold text-foreground/80">LIVE TRACKING</span>
-                        </div>
-                        <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md pointer-events-auto">
-                            <RefreshCw className="h-4 w-4" />
-                        </Button>
                     </div>
 
-                    {/* Fake Map Canvas / Radar */}
-                    <div className="flex-1 relative w-full h-full overflow-hidden flex items-center justify-center">
-                        {/* CSS Map Grid Background */}
-                        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" 
-                             style={{ backgroundImage: 'radial-gradient(circle at 1.5px 1.5px, currentColor 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-                        
-                        {/* Radar sweeping effect */}
-                        <div className="absolute w-[80vw] h-[80vw] sm:w-[600px] sm:h-[600px] rounded-full border border-primary/10 flex items-center justify-center pointer-events-none">
-                            <div className="w-[70%] h-[70%] rounded-full border border-primary/10" />
-                            <div className="absolute w-[40%] h-[40%] rounded-full border border-primary/20" />
-                            <div className="absolute inset-0 rounded-full" 
-                                 style={{ background: 'conic-gradient(from 0deg, transparent 0 340deg, rgba(var(--primary), 0.1) 360deg)', animation: 'spin 4s linear infinite' }} />
-                        </div>
+                    {/* ── Map Area ── */}
+                    <div className="flex-1 relative overflow-hidden bg-slate-100 dark:bg-slate-900">
+                        <LiveMap
+                            trackings={filtered}
+                            trails={trails}
+                            selectedId={selectedId}
+                            onSelect={handleSelect}
+                        />
 
-                        {/* Rendering Enumerator Nodes */}
-                        {filtered.map((item) => {
-                            const sc = statusConfig[item.status];
-                            const isSelected = selectedId === item.id;
-                            const zIndex = isSelected ? 50 : (item.status === 'moving' ? 40 : 10);
-                            
+                        {/* Selected Enumerator Info Overlay */}
+                        {selectedId !== null && (() => {
+                            const sel = trackings.find((t) => t.id === selectedId);
+                            if (!sel) return null;
+                            const sc = STATUS_CFG[sel.status];
                             return (
-                                <div key={item.id}
-                                     className={`absolute transition-all duration-1000 ease-linear cursor-pointer transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group`}
-                                     style={{ 
-                                         left: `${item.coord.x}%`, 
-                                         top: `${item.coord.y}%`, 
-                                         zIndex 
-                                     }}
-                                     onClick={() => setSelected(isSelected ? null : item.id)}>
-                                    
-                                    {/* Tooltip on Map */}
-                                    <div className={`mb-1.5 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-background border shadow-xl rounded-lg p-2 pointer-events-none
-                                        ${isSelected ? 'opacity-100 scale-100' : 'scale-95'}`}>
-                                        <p className="text-xs font-bold leading-none">{item.name}</p>
-                                        <p className="text-[10px] text-muted-foreground mt-0.5">{item.wilayah}</p>
-                                    </div>
-
-                                    {/* Pin */}
-                                    <div className={`relative flex h-10 w-10 items-center justify-center rounded-full border-[3px] shadow-lg transition-transform ${isSelected ? 'scale-110 border-primary' : 'border-background hover:scale-105'}`}>
-                                        <Avatar className="h-full w-full">
-                                            <AvatarFallback className="text-[10px] font-bold bg-muted text-foreground">
-                                                {item.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        
-                                        {/* Status Dot */}
-                                        <span className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-background ${sc.bg} flex items-center justify-center`}>
-                                            {item.status === 'moving' && <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-40 animate-ping" />}
-                                        </span>
-                                    </div>
-
-                                    {/* Selected Ripple effect */}
-                                    {isSelected && (
-                                        <div className="absolute inset-0 flex items-center justify-center -z-10 pointer-events-none">
-                                            <div className="absolute h-24 w-24 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: '3s' }} />
-                                            <div className="absolute h-16 w-16 rounded-full bg-primary/20 animate-ping" style={{ animationDuration: '2s' }} />
-                                        </div>
-                                    )}
+                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
+                                    <Card className="shadow-2xl border-2 pointer-events-auto min-w-[280px]">
+                                        <CardContent className="p-3">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-10 w-10 shrink-0">
+                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                                                        {sel.name.split(' ').map((n) => n[0]).join('').substring(0, 2)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-bold text-sm">{sel.name}</p>
+                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>
+                                                            {sc.label}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">{sel.wilayah}</p>
+                                                    <p className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                                                        {sel.lat.toFixed(6)}, {sel.lng.toFixed(6)}
+                                                    </p>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                                    <span className="flex items-center gap-1 text-[10px]">
+                                                        <BatteryIcon level={sel.battery} /> {sel.battery}%
+                                                    </span>
+                                                    <SignalIcon type={sel.signal} />
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
                                 </div>
                             );
-                        })}
+                        })()}
                     </div>
-                </Card>
+                </div>
             </div>
         </>
     );
-}
-
-// Add global styles for keyframes not in tailwind preset by default
-if (typeof document !== 'undefined') {
-    const style = document.createElement('style');
-    style.innerHTML = `
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    `;
-    document.head.appendChild(style);
 }
