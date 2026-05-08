@@ -21,6 +21,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::inertia('tracking', 'admin/tracking/index')->name('tracking.index');
         Route::inertia('laporan', 'admin/laporan/index')->name('laporan.index');
 
+        // Penilaian Enumerator — full CRUD
+        Route::get('penilaian', [App\Http\Controllers\Admin\AssessmentController::class, 'index'])->name('penilaian.index');
+        Route::post('penilaian', [App\Http\Controllers\Admin\AssessmentController::class, 'store'])->name('penilaian.store');
+        Route::put('penilaian/{assessment}', [App\Http\Controllers\Admin\AssessmentController::class, 'update'])->name('penilaian.update');
+        Route::delete('penilaian/{assessment}', [App\Http\Controllers\Admin\AssessmentController::class, 'destroy'])->name('penilaian.destroy');
+
         // Users — full CRUD
         Route::get('users', [App\Http\Controllers\Admin\UserController::class, 'index'])->name('users.index');
         Route::post('users', [App\Http\Controllers\Admin\UserController::class, 'store'])->name('users.store');

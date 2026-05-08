@@ -148,3 +148,32 @@ export interface AppUser {
     created_at: string;
     updated_at: string;
 }
+
+// ── Penilaian Enumerator ───────────────────────────────────
+
+export interface EnumeratorOption {
+    id: number;
+    name: string;
+    nik: string;
+}
+
+export interface EnumeratorAssessment {
+    id: number;
+    enumerator_id: number;
+    enumerator_name: string;
+    enumerator_nik: string;
+    supervisor_name: string;
+    pemahaman_tugas: number;           // 1-5
+    keterampilan_wawancara: number;    // 1-5
+    kualitas_pengisian_data: number;   // 1-5
+    ketepatan_waktu: number;           // 1-5
+    etika_profesionalisme: number;     // 1-5
+    kepatuhan_sop: number;             // 1-5
+    kemampuan_teknis: number;          // 1-5
+    evaluasi_supervisor: number;       // 1-5
+    nilai_akhir: number;
+    catatan?: string;
+    periode?: string;
+    created_at: string;
+    updated_at: string;
+}

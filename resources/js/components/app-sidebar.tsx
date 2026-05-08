@@ -5,6 +5,7 @@ import {
     Users,
     MapPin,
     ClipboardList,
+    ClipboardCheck,
     Briefcase,
     BarChart3,
     FolderGit2,
@@ -55,7 +56,8 @@ const dataNavItems: NavItem[] = [
 
 // ── Group: Analitik ────────────────────────────────────────
 const analyticsNavItems: NavItem[] = [
-    { title: 'Laporan', href: '/admin/laporan', icon: BarChart3 },
+    { title: 'Penilaian',  href: '/admin/penilaian', icon: ClipboardCheck },
+    { title: 'Laporan',    href: '/admin/laporan',   icon: BarChart3 },
 ];
 
 // ── Group: Administrasi ────────────────────────────────────
